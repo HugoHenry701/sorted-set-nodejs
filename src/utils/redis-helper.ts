@@ -63,8 +63,15 @@ export const redisSetSortedSet = async (
 export const redisGetSortedSet = async (
   key: string,
   limit: number,
-  offset: number
+  offset: number,
+  reverse?: boolean
 ) => {
   const app_name = process.env.APP_NAME || '';
-  return await redisInstance.zRange(`${key}_${app_name}`, limit, offset);
+  if (reverse === true) {
+    return await redisInstance.zRange(`${key}_${app_name}`, limit, offset, {
+      REV: true,
+    });
+  } else {
+    return await redisInstance.zRange(`${key}_${app_name}`, limit, offset);
+  }
 };

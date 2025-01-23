@@ -13,12 +13,29 @@ import { validateRequest } from '../middlewares/validate-request';
 import { createStartService } from '../services/start';
 import { TableStats } from '../models/table-stats';
 import { SECOND_CONFIG } from '../constants/second';
+import { createStartWorker } from '../workers/start/create-start-worker';
 const router = express.Router();
 
 router.get('/api/start', async (req: Request, res: Response) => {
   const { page_size, page_num } = req.query;
   const pageSize = parseInt(page_size as string, 10) || null;
   const pageNum = parseInt(page_num as string, 10) || null;
+
+  /** Test Multi Thread **/
+  let count = 0;
+  const THREAD_COUNT = 4;
+  count = (
+    await Promise.all(
+      Array(4)
+        .fill(0)
+        .map(() =>
+          createStartWorker({
+            THREAD_COUNT,
+          })
+        )
+    )
+  ).reduce((total, num) => total + num, 0);
+  /** Test Multi Thread **/
 
   /** HIT Cache **/
   const keyCacheName = `start-get-list-${pageSize || ''}-${pageNum || ''}`;
@@ -27,6 +44,7 @@ router.get('/api/start', async (req: Request, res: Response) => {
     res.status(200).send({
       response_status: 1,
       data: cacheData,
+      count,
     });
     return;
   }
@@ -62,6 +80,7 @@ router.get('/api/start', async (req: Request, res: Response) => {
       length: starts.length,
       starts,
     },
+    count,
   });
 });
 router.post(
@@ -72,7 +91,7 @@ router.post(
 );
 router.get('/api/start-ranking', async (req: Request, res: Response) => {
   const keyRankingStart = `ranking-start`;
-  const rankingStart = await redisGetSortedSet(keyRankingStart, 0, -1);
+  const rankingStart = await redisGetSortedSet(keyRankingStart, 0, -1, true);
   if (rankingStart.length > 0) {
     res.status(200).send({
       response_status: 1,
@@ -90,10 +109,13 @@ router.get('/api/start-ranking', async (req: Request, res: Response) => {
       redisSetSortedSet(keyRankingStart, e, e.price);
     })
   );
+  const sortedStartList = await redisGetSortedSet(keyRankingStart, 0, -1, true);
   res.status(200).send({
     response_status: 1,
     data: {
-      ranking_start: startList,
+      ranking_start: sortedStartList.map((e) => {
+        return JSON.parse(e);
+      }),
     },
   });
 });
